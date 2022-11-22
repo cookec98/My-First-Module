@@ -15,6 +15,9 @@ public class Template : MonoBehaviour {
     public KMSelectable[] Buttons;
     public TextMesh[] Displays;
 
+    public Animator animator;
+    public const string _Transform = "TransformController";
+
     public string[] ColorOrder = {"Blue", "Red", "Yellow", "Green"};
     public int Base10;
     public int FinalBase;
@@ -62,12 +65,16 @@ public class Template : MonoBehaviour {
         }
         if (ButtonsToPress.Count() == 0)
         {
+            animator.SetTrigger(_Transform);
+            Displays[0].text = "";
+            Displays[1].text = "";
             GetComponent<KMBombModule>().HandlePass();
             ModuleSolved = true;
         }
     }
 
    void Start () {
+        animator = GetComponent<Animator>();
         Base10 = Rnd.Range(40, 1000);
         Displays[0].text = Base10.ToString();
         FinalBase = Rnd.Range(4, 10);
