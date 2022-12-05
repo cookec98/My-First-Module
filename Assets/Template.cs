@@ -14,12 +14,23 @@ public class Template : MonoBehaviour {
 
     public KMSelectable[] Buttons;
     public TextMesh[] Displays;
+    public Light[] Lights;
 
     public Animator animator;
     public const string _Transform = "TransformController";
 
+    public Coroutine flashStage;
+    public Coroutine flashPress;
     public string[] ColorOrder = {"Blue", "Red", "Yellow", "Green"};
+    public int[,] cubeNet = { { 100, 100, 1, 100, 100 }, { 100, 0, 2, 3, 100 }, { 100, 100, 4, 100, 100 }, { 100, 100, 5, 100, 100 } };
+    public int[] flashes = { 0, 0, 0 };
+    public int stage = 0;
+    public int current;
+    public int adjacent;
     public int Base10;
+    public int[] position;
+    public int Orientation;
+    public int phase = 1;
     public int FinalBase;
     List<int> Answer = new List<int>();
     List<int> ButtonsToPress = new List<int>();
@@ -40,36 +51,59 @@ public class Template : MonoBehaviour {
     void ButtonPress (KMSelectable Button)
     {
         Button.AddInteractionPunch();
+        Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.ButtonPress, Button.transform);
         if (ModuleSolved)
         {
             return;
         }
-
         if (ModuleSolved)
         {
             return;
         }
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 6; i++)
         {
             if (Button == Buttons[i])
             {
+                HandleButtonFlash(i);
                 if (ButtonsToPress[0] == i)
                 {
                     ButtonsToPress.RemoveAt(0);
                 }
                 else
                 {
+                    Debug.LogFormat("[My First Module #{0}] The button to press was {1}, but {2} was pressed", ModuleId, current, i);
                     GetComponent<KMBombModule>().HandleStrike();
                 }
             }
         }
         if (ButtonsToPress.Count() == 0)
         {
-            animator.SetTrigger(_Transform);
-            Displays[0].text = "";
-            Displays[1].text = "";
-            GetComponent<KMBombModule>().HandlePass();
-            ModuleSolved = true;
+            if (phase == 1)
+            {
+                animator.SetTrigger(_Transform);
+                Displays[0].text = "";
+                Displays[1].text = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    flashes[i] = Rnd.Range(0, 6);
+                }
+                flashStage = StartCoroutine(HandleStageFlash());
+                phase++;
+                Answer = new List<int>();
+                Phase2();
+            }
+            else if (phase == 2 && stage < 2)
+            {
+                stage++;
+                Phase2();
+            }
+            else if (phase == 2 && stage == 2)
+            {
+                stage++;
+                Audio.PlaySoundAtTransform("mus_mett_applause", transform);
+                GetComponent<KMBombModule>().HandlePass();
+                ModuleSolved = true;
+            }
         }
     }
 
@@ -157,7 +191,356 @@ public class Template : MonoBehaviour {
         Debug.LogFormat("[My First Module #{0}] The buttons to press are{1}", ModuleId, Colors);
     }
 
-   void Update () {
+    void Phase2()
+    {
+        adjacent = getAdjacent();
+        current = flashes[stage];
+        Orientation = getOrientation(adjacent);
+        position = getPosition();
+        switch (stage)
+        {
+            case 0:
+                Move(0);
+                Debug.LogFormat("[My First Module #{0}] Moved to {1}", ModuleId, current);
+                Move(0);
+                Debug.LogFormat("[My First Module #{0}] Moved to {1}", ModuleId, current);
+                break;
+            case 1:
+                // Orientation = (Orientation + 1) % 4;
+                Move(0);
+                Debug.LogFormat("[My First Module #{0}] Moved to {1}", ModuleId, current);
+                Move(3);
+                Debug.LogFormat("[My First Module #{0}] Moved to {1}", ModuleId, current);
+                Move(0);
+                Debug.LogFormat("[My First Module #{0}] Moved to {1}", ModuleId, current);
+                Move(3);
+                Debug.LogFormat("[My First Module #{0}] Moved to {1}", ModuleId, current);
+                break;
+            case 2:
+                Move(2);
+                Debug.LogFormat("[My First Module #{0}] Moved to {1}", ModuleId, current);
+                Move(3);
+                Debug.LogFormat("[My First Module #{0}] Moved to {1}", ModuleId, current);
+                Move(2);
+                Debug.LogFormat("[My First Module #{0}] Moved to {1}", ModuleId, current);
+                Move(2);
+                Debug.LogFormat("[My First Module #{0}] Moved to {1}", ModuleId, current);
+                break;
+        }
+        Answer.Add(current);
+        foreach (int x in Answer){
+            ButtonsToPress.Add(x);
+        }
+        Debug.LogFormat("[My First Module #{0}] The flashing color is {1} and the color to press for this stage is {2}, which makes total input {3}", ModuleId, flashes[stage], current, ButtonsToPress.ToString());
+    }
+
+    int getAdjacent()
+    {
+        if (stage == 0 && flashes[stage] != 1 && flashes[stage] != 4)
+        {
+            return 1;
+        }
+        else if (stage == 0){
+            return 3;
+        }
+        if (stage == 1 && flashes[stage] != 0 && flashes[stage] != 3)
+        {
+            return 0;
+        }
+        else if (stage == 1)
+        {
+            return 4;
+        }
+        else if (stage == 2 && flashes[stage] != 5 && flashes[stage] != 2)
+        {
+            return 5;
+        }
+        else
+        {
+            return 4;
+        }
+    }
+
+
+    int getOrientation(int adj) // Orientation is an integer that represents the number of 90 degree clockwise turns from straight up
+    {
+        switch (current)
+        {
+            case 0:
+            switch (adj)
+                {
+                    case 1: return 0;
+                    case 2: return 1;
+                    case 4: return 2;
+                    case 5: return 3;
+                }
+                break;
+            case 1:
+                switch (adj)
+                {
+                    case 5: return 0;
+                    case 3: return 1;
+                    case 2: return 2;
+                    case 0: return 3;
+                }
+                break;
+            case 2:
+                switch (adj)
+                {
+                    case 1: return 0;
+                    case 3: return 1;
+                    case 4: return 2;
+                    case 0: return 3;
+                }
+                break;
+            case 3:
+                switch (adj)
+                {
+                    case 1: return 0;
+                    case 5: return 1;
+                    case 4: return 2;
+                    case 2: return 3;
+                }
+                break;
+            case 4:
+                switch (adj)
+                {
+                    case 2: return 0;
+                    case 3: return 1;
+                    case 5: return 2;
+                    case 0: return 3;
+                }
+                break;
+            case 5:
+                switch (adj)
+                {
+                    case 4: return 0;
+                    case 3: return 1;
+                    case 1: return 2;
+                    case 0: return 3;
+                }
+                break;
+        }
+        return 0;
+    }
+
+    int[] getPosition()
+    {
+        int[] temp = { 0, 0 };
+        switch (current)
+        {
+            case 0:
+                temp[0] = 1;
+                temp[1] = 1;
+                return temp;
+            case 1:
+                temp[0] = 0;
+                temp[1] = 2;
+                return temp;
+            case 2:
+                temp[0] = 1;
+                temp[1] = 2;
+                return temp;
+            case 3:
+                temp[0] = 1;
+                temp[1] = 3;
+                return temp;
+            case 4:
+                temp[0] = 2;
+                temp[1] = 2;
+                return temp;
+            case 5:
+                temp[0] = 3;
+                temp[1] = 2;
+                return temp;
+        }
+        return temp;
+    }
+
+    void Move(int direction)
+    {
+        direction = (direction + Orientation) % 4;
+        switch (direction)
+        {
+            case 0:
+                switch (current)
+                {
+                    case 0:
+                        current = 1;
+                        position[0] = 0;
+                        position[1] = 2;
+                        Orientation = (Orientation + 1) % 4;
+                        break;
+                    case 1:
+                        current = 5;
+                        position[0] = 3;
+                        position[1] = 2;
+                        break;
+                    case 3:
+                        current = 1;
+                        position[0] = 0;
+                        position[1] = 2;
+                        Orientation = (Orientation + 3) % 4;
+                        break;
+                    default:
+                        if (position[0] == 0)
+                        {
+                            position[0] = 3;
+                        }
+                        else { position[0] = position[0] - 1; }
+                        current = cubeNet[position[0],position[1]];
+                        break;
+
+                }
+                break;
+            case 1:
+                switch (current)
+                {
+                    case 1:
+                        current = 3;
+                        position[0] = 1;
+                        position[1] = 3;
+                        Orientation = (Orientation + 1) % 4;
+                        break;
+                    case 3:
+                        current = 5;
+                        position[0] = 3;
+                        position[1] = 2;
+                        Orientation = (Orientation + 2) % 4;
+                        break;
+                    case 4:
+                        current = 3;
+                        position[0] = 1;
+                        position[1] = 3;
+                        Orientation = (Orientation + 3) % 4;
+                        break;
+                    case 5:
+                        current = 3;
+                        position[0] = 1;
+                        position[1] = 3;
+                        Orientation = (Orientation + 2) % 4;
+                        break;
+                    default:
+                        if (cubeNet[position[0], position[1] + 1] < 100)
+                        {
+                            position[1] = 1;
+                        }
+                        else { position[1] = position[1] + 1; }
+                        current = cubeNet[position[0], position[1]];
+                        break;
+
+                }
+                break;
+            case 2:
+                switch (current)
+                {
+                    case 0:
+                        current = 4;
+                        position[0] = 2;
+                        position[1] = 2;
+                        Orientation = (Orientation + 3) % 4;
+                        break;
+                    case 5:
+                        current = 1;
+                        position[0] = 0;
+                        position[1] = 2;
+                        break;
+                    case 3:
+                        current = 4;
+                        position[0] = 2;
+                        position[1] = 2;
+                        Orientation = (Orientation + 1) % 4;
+                        break;
+                    default:
+                        if (position[0] == 3)
+                        {
+                            position[0] = 0;
+                        }
+                        else { position[0] = position[0] + 1; }
+                        current = cubeNet[position[0], position[1]];
+                        break;
+
+                }
+                break;
+            case 3:
+                switch (current)
+                {
+                    case 1:
+                        current = 0;
+                        position[0] = 1;
+                        position[1] = 1;
+                        Orientation = (Orientation + 3) % 4;
+                        break;
+                    case 0:
+                        current = 5;
+                        position[0] = 3;
+                        position[1] = 2;
+                        Orientation = (Orientation + 2) % 4;
+                        break;
+                    case 4:
+                        current = 0;
+                        position[0] = 1;
+                        position[1] = 1;
+                        Orientation = (Orientation + 1) % 4;
+                        break;
+                    case 5:
+                        current = 0;
+                        position[0] = 1;
+                        position[1] = 1;
+                        Orientation = (Orientation + 2) % 4;
+                        break;
+                    default:
+                        if (cubeNet[position[0], position[1] - 1] < 100)
+                        {
+                            position[1] = 3;
+                        }
+                        else { position[1] = position[1] - 1; }
+                        current = cubeNet[position[0], position[1]];
+                        break;
+
+                }
+                break;
+        }
+
+    }
+    
+    void moveSound()
+    {
+        Audio.PlaySoundAtTransform("move", transform);
+    }
+
+    void fillSound()
+    {
+        Audio.PlaySoundAtTransform("snd_bombsplosion", transform);
+    }
+
+    void endSound()
+    {
+        Audio.PlaySoundAtTransform("mus_sfx_hypergoner_laugh", transform);
+    }
+
+
+
+    IEnumerator HandleStageFlash()
+    {
+        while (stage < 3)
+        {
+            yield return new WaitForSeconds(3f);
+            Lights[flashes[stage]].enabled = true;
+            yield return new WaitForSeconds(0.8f);
+            Lights[flashes[stage]].enabled = false;
+        }
+
+    }
+
+    IEnumerator HandleButtonFlash(int pos)
+    {
+        Lights[pos].enabled = true;
+        yield return new WaitForSeconds(0.8f);
+        Lights[pos].enabled = false;
+    }
+
+    void Update () {
 
    }
 
